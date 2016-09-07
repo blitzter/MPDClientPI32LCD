@@ -1,16 +1,19 @@
-import tkinter, mpd
+#!/usr/bin/env python3
+import tkinter, mpd, configparser
 from tkinter import Listbox, Label, N, S, E, W
 
 root = tkinter.Tk()
 root.geometry("320x240")
 client = mpd.MPDClient(use_unicode=True)
 footer_text = 'Some Footer!!'
+config = configparser.ConfigParser()
+config.read('config.ini')
 
 class PiScreen(tkinter.Frame):
 
     def __init__(self, master: 'tkinter.Tk'):
         global client, footer_text
-        client.connect("192.168.1.6", 6600)
+        client.connect("192.168.1.120", 6600)
         tkinter.Frame.__init__(self, master, padx=0, pady=0)
         self.pack()
         self.place(height=240, width=320, x=0, y=0)
@@ -58,14 +61,14 @@ class PiScreen(tkinter.Frame):
                                fg='white', height=10, activestyle="none", borderwidth=0, highlightthickness=0)
         self.listbox.bind("<Key>", self.key)
         self.listbox.configure(width=320, height=10)
-        self.listbox.pack(side = tkinter.TOP, expand = 1)
+        self.listbox.pack(side = tkinter.TOP, expand = 1, ipadx = 0, ipady = 0, padx = 0, pady = 0)
         self.listbox.focus_set()
 
         self.footer = Label(self, textvariable=self.footer_text_var, font=('lucidatypewriter', 10, 'bold'), bg='grey',
                             foreground='black')
         self.footer.configure(width=320, height=1)
         self.footer.pack(side = tkinter.TOP)
-        print(self.footer.config())
+
         self.focus_set()
         self.bind("<Key>", self.key)
         self.screen = "1"
@@ -84,7 +87,10 @@ class PiScreen(tkinter.Frame):
         if isinstance(self.screen_data[self.screen], list):
             for item in self.screen_data[self.screen]:
                 if format == "string":
-                    self.listbox.insert(tkinter.END, item)
+                    if not item:
+                        self.listbox.insert(tkinter.END, "N/A")
+                    else:
+                        self.listbox.insert(tkinter.END, item)
                 if format == "SONG":
                     self.listbox.insert(tkinter.END, item["artist"] + " - " + item["title"])
 
@@ -102,11 +108,12 @@ class PiScreen(tkinter.Frame):
         self.headerTextVar.set(header)
 
     def key(self, event):
-        global footer_text
+        global footer_text, config
         # footer_text = "Some Data Entered!!"
         self.footer_text_var.set(str("Some Data Entered!!"))
+        keycode = str(event.keycode)
         # self.footer.configure(text=str('Key Pressed ' + str(event.keycode)))
-        if event.keycode == 40:  # down
+        if keycode == config["PISCREEN_KEYS"]["down"]:  # down
             if self.listbox.size() > 0:
                 selection = int(self.listbox.curselection()[0])
                 count = self.listbox.size()
@@ -115,7 +122,7 @@ class PiScreen(tkinter.Frame):
                     self.listbox.selection_set(selection + 1)
                     self.listbox.event_generate("<<ListboxSelect>>")
             return
-        if event.keycode == 38:  # up
+        if keycode == config["PISCREEN_KEYS"]["up"]:  # up
             if self.listbox.size() > 0:
                 selection = int(self.listbox.curselection()[0])
                 count = self.listbox.size()
@@ -124,14 +131,14 @@ class PiScreen(tkinter.Frame):
                     self.listbox.selection_set(selection - 1)
                     self.listbox.event_generate("<<ListboxSelect>>")
             return
-        if event.keycode == 37 or event.keycode == 27:  # left or escape
+        if keycode == config["PISCREEN_KEYS"]["left"] or keycode == config["PISCREEN_KEYS"]["back"]:  # left or escape
             if self.screen != "1":
                 menu = self.screen.rsplit(".", maxsplit=1)
                 new_screen = menu[0]
                 self.screen = new_screen
                 self.show_screen()
             return
-        if event.keycode == 39 or event.keycode == 13:  # right or return
+        if keycode == config["PISCREEN_KEYS"]["right"] or keycode == config["PISCREEN_KEYS"]["ok"]:  # right or return
             if self.listbox.size() > 0:
                 selection = int(self.listbox.curselection()[0]) + 1
                 new_screen = self.screen + "." + str(selection)
@@ -145,6 +152,7 @@ class PiScreen(tkinter.Frame):
                     if str(new_screen).startswith("1.Q."):
                         menu = new_screen.rsplit(".", maxsplit=1)
                         client.playid(int(self.queue[int(menu[1])-1]["id"]))
+                print(self.screen)
             return
         print("pressed", repr(event.keycode))
 
@@ -164,14 +172,14 @@ class PiScreen(tkinter.Frame):
         if action == "ARTISTS":
             print("ARTISTS")
             self.artists = client.list("artist")
-            self.screen = "1.A"
-            self.screen_data["1.A"] = self.artists
+            self.screen = "1.3.A"
+            self.screen_data["1.3.A"] = self.artists
             self.show_screen()
         if action == "ALBUMS":
             print("ALBUMS")
             self.albums = client.list("album")
-            self.screen = "1.B"
-            self.screen_data["1.B"] = self.albums
+            self.screen = "1.3.B"
+            self.screen_data["1.3.B"] = self.albums
             self.show_screen()
         if action == "GENRES":
             print("GENRES")
