@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-import tkinter, mpd, configparser
-from tkinter import Listbox, Label, Frame, N, S, E, W, Y
+import tkinter, mpd, configparser, subprocess, sys
+from tkinter import Listbox, Label, Canvas, Frame, N, S, E, W, Y
+from PIL import Image, ImageTk
 
 root = tkinter.Tk()
 root.geometry("320x240")
@@ -21,21 +22,14 @@ songs = []
 selectedAlbum = ''
 selectedArtist = ''
 selectedGenre = ''
+currentSong = None
 
 keyMode = 'MENU'
 textEntry = ''
 textBackAction = ''
 textSaveAction = ''
 
-def recursive_items(dictionary):
-    for key, value in dictionary.items():
-        if type(value) is dict:
-            yield (key, value)
-            yield from recursive_items(value)
-        else:
-            yield (key, value)
-
-
+image = None
 
 class PiScreen(tkinter.Frame):
 
@@ -79,10 +73,10 @@ class PiScreen(tkinter.Frame):
         self.footer_text_var = tkinter.StringVar()
         self.footer_text_var.set(str(footer_text))
 
-        self.footerFrame = Frame(self, width=320, height=20)
-        self.footerFrame.pack(side=tkinter.TOP)
+        self.headerFrame = Frame(self, width=320, height=20)
+        self.headerFrame.pack(side=tkinter.TOP)
 
-        self.headerLabel = Label(self.footerFrame, font=('lucidatypewriter', 10, 'bold'), bg='black', foreground='white', textvariable=self.headerTextVar)
+        self.headerLabel = Label(self.headerFrame, font=('lucidatypewriter', 10, 'bold'), bg='black', foreground='white', textvariable=self.headerTextVar)
         self.headerLabel.configure(width=280, height=1)
         self.headerLabel.pack(side = tkinter.TOP)
 
@@ -95,6 +89,8 @@ class PiScreen(tkinter.Frame):
         self.listbox.configure(width=320, height=11)
         self.listbox.pack(side = tkinter.TOP, expand = 1, ipadx = 0, ipady = 0, padx = 0, pady = 0)
         self.listbox.focus_set()
+
+        self.player = Canvas(self.mainFrame, width=320, height=200, bg="black", borderwidth=0, highlightthickness=0)
 
         self.footer = Label(self, textvariable=self.footer_text_var, font=('lucidatypewriter', 10, 'bold'), bg='black',
                             foreground='white')
@@ -112,17 +108,29 @@ class PiScreen(tkinter.Frame):
         self.after(500, self.tick)
 
     def update_header(self):
-        global status
+        global status, keyMode, currentSong
         status = client.status()
+        self.volume = int(status["volume"])
         header = ''
         if status["state"] == "play":
-            song = client.currentsong()
-            header = header + song["artist"] + "-" + song["title"] + " "
+            currentSong = client.currentsong()
+            header = header + currentSong["artist"][:15] + "-" + currentSong["title"][:25] + " "
         header = header + "V" + status["volume"] + ",R" + status["random"]
-        self.headerTextVar.set(header)
-        self.volume = int(status["volume"])
+        if self.headerTextVar.get() != header:
+            self.headerTextVar.set(header)
+            if keyMode == 'PLAYER':
+                self.show_player()
 
     def show_screen(self):
+        global keyMode
+        if self.screen == '':
+            keyMode = 'PLAYER'
+            self.listbox.pack_forget()
+            self.player.pack(side=tkinter.TOP, expand=1, ipadx=0, ipady=0, padx=0, pady=0)
+            self.show_player()
+            self.update()
+            self.screen = '1'
+            return
         self.listbox.delete(0, self.listbox.size() - 1)
         format = "string"
         if self.screen in self.screen_format:
@@ -155,6 +163,24 @@ class PiScreen(tkinter.Frame):
         self.update()
         return
 
+    def show_player(self):
+        global image, currentSong
+        if sys.platform.startswith('linux'):
+            process = subprocess.Popen("./coverart.sh", shell=True, stdout=subprocess.PIPE).stdout.read()
+        else:
+            process = "./icons/ic_album_white_48dp.png"
+        image = ImageTk.PhotoImage(Image.open(process).resize((150,150), Image.ANTIALIAS))
+        self.player.create_image(75, 75, image=image)
+        if type(currentSong) is not None:
+            self.player.create_rectangle(151, 1, 320, 150, fill="black")
+            self.player.create_text(152, 4, text=currentSong['artist'], anchor=tkinter.NW, fill="white",
+                                    font=('lucidatypewriter', 10, 'bold'))
+            self.player.create_text(152, 20, text=currentSong['album'], anchor=tkinter.NW, fill="white",
+                                    font=('lucidatypewriter', 10, 'bold'))
+            self.player.create_text(152, 36, text=currentSong['title'], anchor=tkinter.NW, fill="white",
+                                    font=('lucidatypewriter', 10, 'bold'))
+        return
+
     def key(self, event):
         global footer_text, config, client, selectedAlbum, selectedArtist, selectedGenre
         global keyMode, textEntry, textBackAction, textSaveAction
@@ -162,6 +188,13 @@ class PiScreen(tkinter.Frame):
         # footer_text = "Some Data Entered!!"
         keycode = str(event.keycode)
         self.footer_text_var.set(str("Key Pressed : "+keycode))
+        if keyMode == 'PLAYER':
+            self.listbox.pack(side = tkinter.TOP, expand = 1, ipadx = 0, ipady = 0, padx = 0, pady = 0)
+            keyMode = 'MENU'
+            self.player.pack_forget()
+            self.show_screen()
+            self.update()
+            return
         if keyMode == 'TEXT':
             if keycode == config["PISCREEN_KEYS"]["back"]:  # back
                 keyMode = 'MENU'
@@ -248,7 +281,7 @@ class PiScreen(tkinter.Frame):
                                 print("Added All for artist "+selectedArtist)
                             else:
                                 selectedAlbum = albums[int(menu[1])-1]
-                                songs = client.list("title", "album", selectedAlbum)
+                                songs = client.list("title", "album", selectedAlbum, "artist", selectedArtist)
                                 songs[:0] = ["Add All"]
                                 self.screen = new_screen
                                 self.screen_data[new_screen] = songs
@@ -319,6 +352,10 @@ class PiScreen(tkinter.Frame):
             return
         if keycode == config["PISCREEN_KEYS"]["prev"]:
             client.previous()
+            return
+        if keycode == config["PISCREEN_KEYS"]["home"]:
+            self.screen = ''
+            self.show_screen()
             return
         print("pressed", repr(event.keycode))
 

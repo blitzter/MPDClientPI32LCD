@@ -1,20 +1,21 @@
 #!/bin/bash
 #coverart.sh
 
-DEFAULT_COVER="./icons/ic_album_white_36dp.png"
+DEFAULT_COVER="./icons/ic_album_white_48dp.png"
 
 # for 'mpd' users
+# the mpd.conf line should be in the following format
+# music_directory "/var/mpd/Music"
 MUSICDIR=`cat /etc/mpd.conf | grep -v "#" | grep music_directory`
 MUSICDIR=${MUSICDIR:16}
 MUSICDIR=${MUSICDIR%/$}
+MUSICDIR=${MUSICDIR:1:${#MUSICDIR}-2} # only required is the path is surrounded by " "
 
 MFILE=`mpc current -f %file%`
 MFILE=${MFILE%/*}
 MFILE=${MFILE%/$}
 
-#FULLDIR="$MUSICDIR/$MFILE"
-FULLDIR="/home/pi/mpd/music/$MFILE"
-
+FULLDIR="$MUSICDIR/$MFILE"
 
 ## for 'moc' users under Debian, not sure if other distros use the 'mocp' name for the program:
 #MFILE=`mocp --format "%file"`
