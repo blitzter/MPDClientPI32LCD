@@ -470,7 +470,7 @@ class PiScreen(tkinter.Frame):
             self.show_screen()
         elif action == "UPDATE_LIBRARY":
             self.footer_text_var.set("Updating library")
-            client.rescan()
+            client.update()
         elif action == "SAVE_PLAYLIST":
             keyMode = 'MENU'
             client.save(textEntry)

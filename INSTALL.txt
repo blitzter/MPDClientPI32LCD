@@ -1,0 +1,32 @@
+Start With Raspbian Lite
+
+Make you LCD come up to Console Mode
+
+sudo apt-get update
+sudo apt-get dist-upgrade -y
+sudo apt-get upgrade -y
+sudo apt-get --no-install-recommends install xserver-xorg xinit xserver-xorg-video-fbdev x11-xserver-utils -y
+sudo apt-get install python3 python3-tk -y
+sudo apt-get install python3-pip -y
+sudo apt-get install libjpeg8-dev -y
+sudo pip3 install Pillow python-mpd2
+sudo apt-get install mpd mpc -y # mpc is optional
+
+Setup MPD with host as "any"
+also "music_directory" parameter gets read in coverart.sh so it should be in correctly formatted
+Directory should be surrounded with "" and there should only be one space between the parameter name and value
+Read through coverart.sh in case your covers are not showing up.
+
+Copy the code
+Run the following commands inside the directory
+chmod +x start_pi.sh
+chmod +x coverart.sh
+chmod +x config_pi.sh
+
+Run config command to update key mappings
+sudo ./config_pi.sh
+
+it will save config.ini with key mappings
+
+Run the following to start the client
+sudo ./start_pi.sh
