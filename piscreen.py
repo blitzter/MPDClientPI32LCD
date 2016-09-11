@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import tkinter, mpd, configparser, subprocess, sys
-from tkinter import Listbox, Label, Canvas, Frame, N, S, E, W, Y
+from tkinter import Listbox, Label, Canvas, Frame, Y, X
 from PIL import Image, ImageTk
 
 root = tkinter.Tk()
@@ -31,20 +31,21 @@ textSaveAction = ''
 
 image = None
 
+
 class PiScreen(tkinter.Frame):
 
     def __init__(self, master: 'tkinter.Tk'):
-        global client, footer_text
+        global client, status, footer_text
         client.connect("192.168.1.120", 6600)
         tkinter.Frame.__init__(self, master, padx=0, pady=0)
         self.pack()
         self.place(height=240, width=320, x=0, y=0)
         self.config(bg="black")
-
-        self.volume = 0
+        status = client.status()
+        self.volume = int(status["volume"])
 
         self.screen_data = {
-            "1": ["QUEUE", "PLAYLISTS", "LIBRARY", "SETUP", "CLEAR PLAYLIST"],
+            "1": ["QUEUE", "PLAYLISTS", "LIBRARY", "SETUP", "CLEAR PLAYLIST", "RANDOM "+status['random'], "REPEAT "+status['repeat'], "SINGLE "+status['single'], "CONSUME "+status['consume']],
             "1.1": {"ACTION": "QUEUE"},
             "1.2": {"ACTION": "PLAYLISTS"},
             "1.3": ["ARTISTS", "ALBUMS", "GENRES"],
@@ -58,27 +59,32 @@ class PiScreen(tkinter.Frame):
             "1.4.3.1": {"ACTION": "SET_HDMI_OUT"},
             "1.4.3.2": {"ACTION": "SET_ANALOG_OUT"},
             "1.4.3.3": {"ACTION": "SET_USB_OUT"},
-            "1.5": {"ACTION": "CLEAR"}
+            "1.5": {"ACTION": "CLEAR"},
+            "1.6": {"ACTION": "RANDOM"},
+            "1.7": {"ACTION": "REPEAT"},
+            "1.8": {"ACTION": "SINGLE"},
+            "1.9": {"ACTION": "CONSUME"}
         }
 
         self.screen_format = {
-            "1.Q" : "SONG",
-            "1.P" : "PLAYLIST"
+            "1.Q": "SONG",
+            "1.P": "PLAYLIST"
         }
 
         self.headerText = 'SOME Header'
         self.headerTextVar = tkinter.StringVar()
         self.headerTextVar.set(str(self.headerText))
-        # self.footerText = "Some Footer"
         self.footer_text_var = tkinter.StringVar()
         self.footer_text_var.set(str(footer_text))
 
-        self.headerFrame = Frame(self, width=320, height=20)
-        self.headerFrame.pack(side=tkinter.TOP)
+        self.headerFrame = Frame(self, width=320, height=20, bg="black")
+        self.headerFrame.pack(side=tkinter.TOP, fill=X)
 
-        self.headerLabel = Label(self.headerFrame, font=('lucidatypewriter', 10, 'bold'), bg='black', foreground='white', textvariable=self.headerTextVar)
-        self.headerLabel.configure(width=280, height=1)
-        self.headerLabel.pack(side = tkinter.TOP)
+        self.headerLabel = Label(self.headerFrame, font=('lucidatypewriter', 10, 'bold'), bg='black', foreground='white', textvariable=self.headerTextVar, justify=tkinter.LEFT, anchor=tkinter.W)
+        self.headerLabel.place(x=0, y=0, width=300, height=20, anchor=tkinter.NW)
+
+        self.volumeLabel = Label(self.headerFrame, font=('lucidatypewriter', 10, 'bold'), bg='black', foreground='white', text='')
+        self.volumeLabel.place(x=300, y=0, anchor=tkinter.NW)
 
         self.mainFrame = Frame(self, width=320, height=200)
         self.mainFrame.pack(side=tkinter.TOP, fill=Y)
@@ -87,7 +93,7 @@ class PiScreen(tkinter.Frame):
                                fg='white', height=10, activestyle="none", borderwidth=0, highlightthickness=0)
         self.listbox.bind("<Key>", self.key)
         self.listbox.configure(width=320, height=11)
-        self.listbox.pack(side = tkinter.TOP, expand = 1, ipadx = 0, ipady = 0, padx = 0, pady = 0)
+        self.listbox.pack(side=tkinter.TOP, expand=1, ipadx=0, ipady=0, padx=0, pady=0)
         self.listbox.focus_set()
 
         self.player = Canvas(self.mainFrame, width=320, height=200, bg="black", borderwidth=0, highlightthickness=0)
@@ -109,13 +115,19 @@ class PiScreen(tkinter.Frame):
 
     def update_header(self):
         global status, keyMode, currentSong
+        global random, repeat, single, consume
         status = client.status()
         self.volume = int(status["volume"])
         header = ''
         if status["state"] == "play":
             currentSong = client.currentsong()
             header = header + currentSong["artist"][:15] + "-" + currentSong["title"][:25] + " "
-        header = header + "V" + status["volume"] + ",R" + status["random"]
+        # header = header + "V" + status["volume"] + ",R" + status["random"]
+        random = int(status['random'])
+        repeat = int(status['repeat'])
+        single = int(status['single'])
+        consume = int(status['consume'])
+        self.volumeLabel.configure(text=status["volume"])
         if self.headerTextVar.get() != header:
             self.headerTextVar.set(header)
             if keyMode == 'PLAYER':
@@ -173,11 +185,17 @@ class PiScreen(tkinter.Frame):
         self.player.create_image(75, 75, image=image)
         if type(currentSong) is not None:
             self.player.create_rectangle(151, 1, 320, 150, fill="black")
-            self.player.create_text(152, 4, text=currentSong['artist'], anchor=tkinter.NW, fill="white",
+            self.player.create_text(152, 4, text="Artist:", anchor=tkinter.NW, fill="grey",
                                     font=('lucidatypewriter', 10, 'bold'))
-            self.player.create_text(152, 20, text=currentSong['album'], anchor=tkinter.NW, fill="white",
+            self.player.create_text(152, 20, text=currentSong['artist'], anchor=tkinter.NW, fill="white",
                                     font=('lucidatypewriter', 10, 'bold'))
-            self.player.create_text(152, 36, text=currentSong['title'], anchor=tkinter.NW, fill="white",
+            self.player.create_text(152, 36, text="Song:", anchor=tkinter.NW, fill="grey",
+                                    font=('lucidatypewriter', 10, 'bold'))
+            self.player.create_text(152, 52, text=currentSong['title'], anchor=tkinter.NW, fill="white",
+                                    font=('lucidatypewriter', 10, 'bold'))
+            self.player.create_text(152, 68, text="Album:", anchor=tkinter.NW, fill="grey",
+                                    font=('lucidatypewriter', 10, 'bold'))
+            self.player.create_text(152, 84, text=currentSong['album'], anchor=tkinter.NW, fill="white",
                                     font=('lucidatypewriter', 10, 'bold'))
         return
 
@@ -334,8 +352,9 @@ class PiScreen(tkinter.Frame):
                 print(self.screen)
             return
         if keycode == config["PISCREEN_KEYS"]["vol_up"]:
-            self.volume += 1
-            client.setvol(self.volume)
+            if self.volume < 100:
+                self.volume += 1
+                client.setvol(self.volume)
             return
         if keycode == config["PISCREEN_KEYS"]["vol_down"]:
             self.volume -= 1
@@ -360,7 +379,7 @@ class PiScreen(tkinter.Frame):
         print("pressed", repr(event.keycode))
 
     def run_command(self, action):
-        global client, keyMode, textEntry
+        global client, keyMode, textEntry, status
         global albums, artists, queue, songs, playlists, genres
         if action == "QUEUE":
             print("QUEUE")
@@ -399,13 +418,45 @@ class PiScreen(tkinter.Frame):
         elif action == "UPDATE_LIBRARY":
             print("UPDATE_LIBRARY")
             client.rescan()
-        elif action == "CLEAR":
-            print("Clearing Queue")
-            client.clear()
         elif action == "SAVE_PLAYLIST":
             keyMode = 'MENU'
             client.save(textEntry)
             textEntry = ''
+        elif action == "CLEAR":
+            print("Clearing Queue")
+            client.clear()
+        elif action == "RANDOM":
+            if status['random'] == '0':
+                client.random('1')
+            else:
+                client.random('0')
+            status = client.status()
+            self.screen_data['1'][5] = "RANDOM "+status['random']
+            self.show_screen()
+        elif action == "REPEAT":
+            if status['repeat'] == '0':
+                client.repeat('1')
+            else:
+                client.repeat('0')
+            status = client.status()
+            self.screen_data['1'][6] = "REPEAT "+status['repeat']
+            self.show_screen()
+        elif action == "SINGLE":
+            if status['single'] == '0':
+                client.single('1')
+            else:
+                client.single('0')
+            status = client.status()
+            self.screen_data['1'][7] = "SINGLE "+status['single']
+            self.show_screen()
+        elif action == "CONSUME":
+            if status['consume'] == '0':
+                client.consume('1')
+            else:
+                client.consume('0')
+            status = client.status()
+            self.screen_data['1'][8] = "CONSUME "+status['consume']
+            self.show_screen()
         self.update()
         return
 
