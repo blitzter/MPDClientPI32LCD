@@ -160,7 +160,7 @@ class PiScreen(tkinter.Frame):
             for item in self.screen_data[self.screen]:
                 if format == "string":
                     if not item:
-                        self.listbox.insert(tkinter.END, "N/A")
+                        self.listbox.insert(tkinter.END, "")
                     else:
                         self.listbox.insert(tkinter.END, item[:45])
                 if format == "SONG":
