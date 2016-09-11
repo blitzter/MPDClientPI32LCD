@@ -30,6 +30,7 @@ textBackAction = ''
 textSaveAction = ''
 
 image = None
+tickCount = 0
 
 
 class PiScreen(tkinter.Frame):
@@ -110,23 +111,27 @@ class PiScreen(tkinter.Frame):
         self.tick()
 
     def tick(self):
+        global tickCount, keyMode
         self.update_header()
+        if keyMode != 'PLAYER':
+            tickCount += 1
+            if tickCount > 120:
+                tickCount = 0
+                self.screen = ''
+                self.show_screen()
+        else:
+            tickCount = 0
         self.after(500, self.tick)
 
     def update_header(self):
         global status, keyMode, currentSong
-        global random, repeat, single, consume
         status = client.status()
         self.volume = int(status["volume"])
         header = ''
         if status["state"] == "play":
             currentSong = client.currentsong()
-            header = header + currentSong["artist"][:15] + "-" + currentSong["title"][:25] + " "
+            header = header + currentSong["artist"][:15] + "-" + currentSong["title"][:25]
         # header = header + "V" + status["volume"] + ",R" + status["random"]
-        random = int(status['random'])
-        repeat = int(status['repeat'])
-        single = int(status['single'])
-        consume = int(status['consume'])
         self.volumeLabel.configure(text=status["volume"])
         if self.headerTextVar.get() != header:
             self.headerTextVar.set(header)
@@ -176,14 +181,14 @@ class PiScreen(tkinter.Frame):
         return
 
     def show_player(self):
-        global image, currentSong
+        global image, status, currentSong
         if sys.platform.startswith('linux'):
             process = subprocess.Popen("./coverart.sh", shell=True, stdout=subprocess.PIPE).stdout.read()
         else:
             process = "./icons/ic_album_white_48dp.png"
         image = ImageTk.PhotoImage(Image.open(process).resize((150,150), Image.ANTIALIAS))
         self.player.create_image(75, 75, image=image)
-        if type(currentSong) is not None:
+        if status["state"] == "play":
             self.player.create_rectangle(151, 1, 320, 150, fill="black")
             self.player.create_text(152, 4, text="Artist:", anchor=tkinter.NW, fill="grey",
                                     font=('lucidatypewriter', 10, 'bold'))
@@ -197,16 +202,25 @@ class PiScreen(tkinter.Frame):
                                     font=('lucidatypewriter', 10, 'bold'))
             self.player.create_text(152, 84, text=currentSong['album'], anchor=tkinter.NW, fill="white",
                                     font=('lucidatypewriter', 10, 'bold'))
+        else:
+            self.player.create_rectangle(151, 1, 320, 150, fill="black")
+            self.player.create_text(152, 4, text="Not Playing", anchor=tkinter.NW, fill="grey",
+                                    font=('lucidatypewriter', 10, 'bold'))
         return
 
     def key(self, event):
-        global footer_text, config, client, selectedAlbum, selectedArtist, selectedGenre
-        global keyMode, textEntry, textBackAction, textSaveAction
+        global config, client, selectedAlbum, selectedArtist, selectedGenre
+        global keyMode, textEntry, textBackAction, textSaveAction, tickCount
         global albums, artists, queue, songs, playlists, status, genres
-        # footer_text = "Some Data Entered!!"
+
+        tickCount = 0
         keycode = str(event.keycode)
-        self.footer_text_var.set(str("Key Pressed : "+keycode))
-        if keyMode == 'PLAYER':
+        # self.footer_text_var.set(str("Key Pressed : "+keycode))
+        if keyMode == 'PLAYER' and keycode != config["PISCREEN_KEYS"]["vol_up"] \
+                and keycode != config["PISCREEN_KEYS"]["vol_down"]  \
+                and keycode != config["PISCREEN_KEYS"]["play"]  \
+                and keycode != config["PISCREEN_KEYS"]["next"]  \
+                and keycode != config["PISCREEN_KEYS"]["prev"] :
             self.listbox.pack(side = tkinter.TOP, expand = 1, ipadx = 0, ipady = 0, padx = 0, pady = 0)
             keyMode = 'MENU'
             self.player.pack_forget()
@@ -225,6 +239,20 @@ class PiScreen(tkinter.Frame):
                 self.footer_text_var.set(str("Entry : " + textEntry))
             return
         # self.footer.configure(text=str('Key Pressed ' + str(event.keycode)))
+        if keycode == config["PISCREEN_KEYS"]["menu"]:
+            if self.screen == "1.P":
+                selection = int(self.listbox.curselection()[0]) + 1
+                if selection > 1:
+                    self.footer_text_var.set(str("Press 1 + OK to Delete Playlist"))
+                    keyMode = 'TEXT'
+                    textBackAction = "PLAYLISTS"
+                    textSaveAction = "DELETE_PLAYLIST"
+            if self.screen == "1.Q":
+                self.footer_text_var.set(str("Press OK to remove Song"))
+                keyMode = 'TEXT'
+                textBackAction = "QUEUE"
+                textSaveAction = "DELETE_SONG"
+            return
         if keycode == config["PISCREEN_KEYS"]["down"]:  # down
             if self.listbox.size() > 0:
                 selection = int(self.listbox.curselection()[0])
@@ -248,6 +276,9 @@ class PiScreen(tkinter.Frame):
                 menu = self.screen.rsplit(".", maxsplit=1)
                 new_screen = menu[0]
                 self.screen = new_screen
+                self.show_screen()
+            else:
+                self.screen = ''
                 self.show_screen()
             return
         if keycode == config["PISCREEN_KEYS"]["right"] or keycode == config["PISCREEN_KEYS"]["ok"]:  # right or return
@@ -297,6 +328,8 @@ class PiScreen(tkinter.Frame):
                             if menu[1] == "1": # add all
                                 client.findadd("artist", selectedArtist)
                                 print("Added All for artist "+selectedArtist)
+                                self.screen = menu[0].rsplit(".", maxsplit=1)[0]
+                                self.show_screen()
                             else:
                                 selectedAlbum = albums[int(menu[1])-1]
                                 songs = client.list("title", "album", selectedAlbum, "artist", selectedArtist)
@@ -311,10 +344,12 @@ class PiScreen(tkinter.Frame):
                             if menu[1] == "1":  # add all
                                 client.findadd("album", selectedAlbum, "artist", selectedArtist)
                                 print("Added All for album/artist " + selectedAlbum + "/" + selectedArtist)
+                                self.screen = menu[0].rsplit(".", maxsplit=1)[0]
+                                self.show_screen()
                             else:
                                 selectedsong = songs[int(menu[1]) - 1]
                                 songs = client.findadd("title", selectedsong,"album", selectedAlbum, "artist", selectedArtist)
-                                print("Added All for title/album/artist " + selectedsong + "/" + selectedAlbum + "/" + selectedArtist)
+                                print("Added title/album/artist " + selectedsong + "/" + selectedAlbum + "/" + selectedArtist)
                             return
                     if str(new_screen).startswith("1.3.B"):
                         menu = new_screen.rsplit(".", maxsplit=1)
@@ -329,7 +364,9 @@ class PiScreen(tkinter.Frame):
                         if new_screen.count(".") == 4:
                             if menu[1] == "1":  # add all
                                 client.findadd("album", selectedAlbum)
-                                print("Added All for album " + selectedAlbum )
+                                print("Added All for album " + selectedAlbum)
+                                self.screen = menu[0].rsplit(".", maxsplit=1)[0]
+                                self.show_screen()
                             else:
                                 selectedsong = songs[int(menu[1]) - 1]
                                 songs = client.findadd("title", selectedsong,"album", selectedAlbum)
@@ -389,6 +426,7 @@ class PiScreen(tkinter.Frame):
                 queue.append(item)
             self.screen = "1.Q"
             self.screen_data["1.Q"] = queue
+            self.footer_text_var.set("Right to play Song, Menu to delete")
             self.show_screen()
         elif action == "PLAYLISTS":
             print("PLAYLISTS")
@@ -396,6 +434,7 @@ class PiScreen(tkinter.Frame):
             playlists[:0] = ["SAVE PLAYLIST"]
             self.screen = "1.P"
             self.screen_data["1.P"] = playlists
+            self.footer_text_var.set("Right to play Playlist, Menu to delete")
             self.show_screen()
         elif action == "ARTISTS":
             print("ARTISTS")
@@ -422,6 +461,19 @@ class PiScreen(tkinter.Frame):
             keyMode = 'MENU'
             client.save(textEntry)
             textEntry = ''
+            self.run_command("PLAYLISTS")
+        elif action == "DELETE_PLAYLIST":
+            keyMode = 'MENU'
+            if textEntry == '1':
+                selection = int(self.listbox.curselection()[0])
+                client.rm(playlists[selection]['playlist'])
+            textEntry = ''
+            self.run_command("PLAYLISTS")
+        elif action == "DELETE_SONG":
+            keyMode = 'MENU'
+            client.delete(int(self.listbox.curselection()[0]))
+            textEntry = ''
+            self.run_command("QUEUE")
         elif action == "CLEAR":
             print("Clearing Queue")
             client.clear()
