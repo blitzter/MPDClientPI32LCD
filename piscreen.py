@@ -2,6 +2,7 @@
 import tkinter, mpd, configparser, subprocess, sys
 from tkinter import Listbox, Label, Canvas, Frame, Y, X
 from PIL import Image, ImageTk
+from subprocess import call
 
 root = tkinter.Tk()
 root.geometry("320x240")
@@ -37,7 +38,10 @@ class PiScreen(tkinter.Frame):
 
     def __init__(self, master: 'tkinter.Tk'):
         global client, status, footer_text
-        client.connect("192.168.1.120", 6600)
+        host = '192.168.1.120'
+        if sys.platform.startswith('linux'):
+            host = 'localhost'
+        client.connect(host, 6600)
         tkinter.Frame.__init__(self, master, padx=0, pady=0)
         self.pack()
         self.place(height=240, width=320, x=0, y=0)
@@ -285,7 +289,6 @@ class PiScreen(tkinter.Frame):
             if self.listbox.size() > 0:
                 selection = int(self.listbox.curselection()[0]) + 1
                 new_screen = self.screen + "." + str(selection)
-                print(new_screen)
                 if new_screen in self.screen_data:
                     if type(self.screen_data[new_screen]) is list:
                         self.screen = new_screen
@@ -386,40 +389,55 @@ class PiScreen(tkinter.Frame):
                             songs = client.findadd("title", selectedsong, "genre", selectedGenre)
                             print("Added title/genre " + selectedsong + selectedGenre)
                         return
-                print(self.screen)
             return
         if keycode == config["PISCREEN_KEYS"]["vol_up"]:
             if self.volume < 100:
                 self.volume += 1
                 client.setvol(self.volume)
+                self.footer_text_var.set("Volume Up")
+            else:
+                self.footer_text_var.set("Volume Max!!")
             return
         if keycode == config["PISCREEN_KEYS"]["vol_down"]:
-            self.volume -= 1
-            client.setvol(self.volume)
+            if self.volume > 0:
+                self.volume -= 1
+                client.setvol(self.volume)
+                self.footer_text_var.set("Volume Down")
+            else:
+                self.footer_text_var.set("Volume Zero!!")
             return
         if keycode == config["PISCREEN_KEYS"]["play"]:
             if status["state"] == "play":
                 client.pause()
+                self.footer_text_var.set("Paused")
             else:
                 client.play()
+                self.footer_text_var.set("Playing")
             return
         if keycode == config["PISCREEN_KEYS"]["next"]:
             client.next()
+            self.footer_text_var.set("Next Song")
             return
         if keycode == config["PISCREEN_KEYS"]["prev"]:
             client.previous()
+            self.footer_text_var.set("Previous Song")
             return
         if keycode == config["PISCREEN_KEYS"]["home"]:
             self.screen = ''
             self.show_screen()
             return
-        print("pressed", repr(event.keycode))
+        if keycode == config["PISCREEN_KEYS"]["power"]:
+            if sys.platform.startswith('linux'):
+                call("sudo nohup shutdown -h now", shell=True)
+            else:
+                self.footer_text_var.set("Can't PowerOff from remote")
+            return
+        self.footer_text_var.set("UNKNOWN "+keycode)
 
     def run_command(self, action):
         global client, keyMode, textEntry, status
         global albums, artists, queue, songs, playlists, genres
         if action == "QUEUE":
-            print("QUEUE")
             local_queue = client.playlistinfo()
             queue.clear()
             for item in local_queue:
@@ -429,7 +447,6 @@ class PiScreen(tkinter.Frame):
             self.footer_text_var.set("Right to play Song, Menu to delete")
             self.show_screen()
         elif action == "PLAYLISTS":
-            print("PLAYLISTS")
             playlists = client.listplaylists()
             playlists[:0] = ["SAVE PLAYLIST"]
             self.screen = "1.P"
@@ -437,25 +454,22 @@ class PiScreen(tkinter.Frame):
             self.footer_text_var.set("Right to play Playlist, Menu to delete")
             self.show_screen()
         elif action == "ARTISTS":
-            print("ARTISTS")
             artists = client.list("artist")
             self.screen = "1.3.A"
             self.screen_data["1.3.A"] = artists
             self.show_screen()
         elif action == "ALBUMS":
-            print("ALBUMS")
             albums = client.list("album")
             self.screen = "1.3.B"
             self.screen_data["1.3.B"] = albums
             self.show_screen()
         elif action == "GENRES":
-            print("GENRES")
             genres = client.list("genre")
             self.screen = "1.3.C"
             self.screen_data["1.3.C"] = genres
             self.show_screen()
         elif action == "UPDATE_LIBRARY":
-            print("UPDATE_LIBRARY")
+            self.footer_text_var.set("Updating library")
             client.rescan()
         elif action == "SAVE_PLAYLIST":
             keyMode = 'MENU'
@@ -475,7 +489,7 @@ class PiScreen(tkinter.Frame):
             textEntry = ''
             self.run_command("QUEUE")
         elif action == "CLEAR":
-            print("Clearing Queue")
+            self.footer_text_var.set("Clearing Queue")
             client.clear()
         elif action == "RANDOM":
             if status['random'] == '0':
