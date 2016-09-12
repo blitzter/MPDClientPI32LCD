@@ -224,8 +224,9 @@ class PiScreen(tkinter.Frame):
                 and keycode != config["PISCREEN_KEYS"]["vol_down"]  \
                 and keycode != config["PISCREEN_KEYS"]["play"]  \
                 and keycode != config["PISCREEN_KEYS"]["next"]  \
-                and keycode != config["PISCREEN_KEYS"]["prev"] :
-            self.listbox.pack(side = tkinter.TOP, expand = 1, ipadx = 0, ipady = 0, padx = 0, pady = 0)
+                and keycode != config["PISCREEN_KEYS"]["prev"]  \
+                and keycode != config["PISCREEN_KEYS"]["power"]:
+            self.listbox.pack(side=tkinter.TOP, expand=1, ipadx=0, ipady=0, padx=0, pady=0)
             keyMode = 'MENU'
             self.player.pack_forget()
             self.show_screen()
