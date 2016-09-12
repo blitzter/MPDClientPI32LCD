@@ -473,7 +473,19 @@ class PiScreen(tkinter.Frame):
             client.update()
         elif action == "SAVE_PLAYLIST":
             keyMode = 'MENU'
-            client.save(textEntry)
+            found = False
+            if textEntry == '':
+                self.footer_text_var.set("Name Empty!!")
+                return
+            for playlist in playlists:
+                if isinstance(playlist, str) is False and textEntry == playlist['playlist']:
+                    found = True
+            if found:
+                client.rm(textEntry)
+                client.save(textEntry)
+            else:
+                client.save(textEntry)
+            self.footer_text_var.set("Saved Playlist "+textEntry)
             textEntry = ''
             self.run_command("PLAYLISTS")
         elif action == "DELETE_PLAYLIST":
