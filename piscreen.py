@@ -7,7 +7,7 @@ from subprocess import call
 root = tkinter.Tk()
 root.geometry("320x240")
 client = mpd.MPDClient(use_unicode=True)
-footer_text = 'Some Footer!!'
+footer_text = ''
 config = configparser.ConfigParser()
 config.read('config.ini')
 
@@ -104,7 +104,7 @@ class PiScreen(tkinter.Frame):
         self.player = Canvas(self.mainFrame, width=320, height=200, bg="black", borderwidth=0, highlightthickness=0)
 
         self.footer = Label(self, textvariable=self.footer_text_var, font=('lucidatypewriter', 10, 'bold'), bg='black',
-                            foreground='white')
+                            foreground='white', justify=tkinter.LEFT, anchor=tkinter.W)
         self.footer.configure(width=320, height=1)
         self.footer.pack(side = tkinter.BOTTOM)
 
@@ -330,7 +330,7 @@ class PiScreen(tkinter.Frame):
                             menu = new_screen.rsplit(".", maxsplit=1)
                             if menu[1] == "1": # add all
                                 client.findadd("artist", selectedArtist)
-                                print("Added All for artist "+selectedArtist)
+                                self.footer_text_var.set("Added All for "+selectedArtist)
                                 self.screen = menu[0].rsplit(".", maxsplit=1)[0]
                                 self.show_screen()
                             else:
@@ -346,13 +346,13 @@ class PiScreen(tkinter.Frame):
                             menu = new_screen.rsplit(".", maxsplit=1)
                             if menu[1] == "1":  # add all
                                 client.findadd("album", selectedAlbum, "artist", selectedArtist)
-                                print("Added All for album/artist " + selectedAlbum + "/" + selectedArtist)
+                                self.footer_text_var.set("Added All for " + selectedAlbum + "/" + selectedArtist)
                                 self.screen = menu[0].rsplit(".", maxsplit=1)[0]
                                 self.show_screen()
                             else:
-                                selectedsong = songs[int(menu[1]) - 1]
-                                songs = client.findadd("title", selectedsong,"album", selectedAlbum, "artist", selectedArtist)
-                                print("Added title/album/artist " + selectedsong + "/" + selectedAlbum + "/" + selectedArtist)
+                                selected_song = songs[int(menu[1]) - 1]
+                                client.findadd("title", selected_song,"album", selectedAlbum, "artist", selectedArtist)
+                                self.footer_text_var.set("Added " + selected_song + "/" + selectedAlbum + "/" + selectedArtist)
                             return
                     if str(new_screen).startswith("1.3.B"):
                         menu = new_screen.rsplit(".", maxsplit=1)
@@ -367,13 +367,13 @@ class PiScreen(tkinter.Frame):
                         if new_screen.count(".") == 4:
                             if menu[1] == "1":  # add all
                                 client.findadd("album", selectedAlbum)
-                                print("Added All for album " + selectedAlbum)
+                                self.footer_text_var.set("Added All for album " + selectedAlbum)
                                 self.screen = menu[0].rsplit(".", maxsplit=1)[0]
                                 self.show_screen()
                             else:
-                                selectedsong = songs[int(menu[1]) - 1]
-                                songs = client.findadd("title", selectedsong,"album", selectedAlbum)
-                                print("Added title/album " + selectedsong + "/" + selectedAlbum)
+                                selected_song = songs[int(menu[1]) - 1]
+                                client.findadd("title", selected_song,"album", selectedAlbum)
+                                self.footer_text_var.set("Added " + selected_song + "/" + selectedAlbum)
                         return
                     if str(new_screen).startswith("1.3.C"):
                         menu = new_screen.rsplit(".", maxsplit=1)
@@ -385,9 +385,9 @@ class PiScreen(tkinter.Frame):
                             self.show_screen()
                             print("Genre Selected " + selectedAlbum)
                         if new_screen.count(".") == 4:
-                            selectedsong = songs[int(menu[1]) - 1]
-                            songs = client.findadd("title", selectedsong, "genre", selectedGenre)
-                            print("Added title/genre " + selectedsong + selectedGenre)
+                            selected_song = songs[int(menu[1]) - 1]
+                            client.findadd("title", selected_song, "genre", selectedGenre)
+                            self.footer_text_var.set("Added " + selected_song + selectedGenre)
                         return
             return
         if keycode == config["PISCREEN_KEYS"]["vol_up"]:
