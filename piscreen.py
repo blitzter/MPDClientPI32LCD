@@ -30,6 +30,7 @@ textBackAction = ''
 textSaveAction = ''
 
 image = None
+bg = None
 awayCount = 0
 footerMessage = ''
 footerMessageCount = 0
@@ -224,28 +225,35 @@ class PiScreen(tkinter.Frame):
         return
 
     def show_player(self):
-        global image, status, currentSong, songChanged
+        global image, bg, status, currentSong, songChanged
         if songChanged or image is None:
             if sys.platform.startswith('linux'):
                 process = subprocess.Popen("./coverart.sh", shell=True, stdout=subprocess.PIPE).stdout.read()
             else:
-                process = "./icons/bg.png"
-            image = ImageTk.PhotoImage(Image.open(process).resize((320,240), Image.ANTIALIAS))
+                process = "./icons/ic_album_white_48dp.png"
+            image = ImageTk.PhotoImage(Image.open(process).resize((136,136), Image.ANTIALIAS))
+            process = "./icons/bg.png"
+            bg = ImageTk.PhotoImage(Image.open(process).resize((320, 240), Image.ANTIALIAS))
 
         if status["state"] == "play":
             if songChanged:
-                self.playerScreen.create_image(160, 120, image=image)
-                #self.playerScreen.create_rectangle(151, 1, 320, 150, fill="black")
+                self.playerScreen.create_image(160, 120, image=bg)
 
-                self.playerScreen.create_text(15, 130, text=currentSong['artist'], anchor=tkinter.NW, fill="white",
+                self.playerScreen.create_rectangle(10, 10, 150, 150, fill="white")
+                self.playerScreen.create_image(80, 80, image=image)
+
+                self.playerScreen.create_text(10, 160, text=currentSong['artist'], anchor=tkinter.NW, fill="white",
                                               font=('lucidatypewriter', 14, 'bold'))
-                self.playerScreen.create_text(15, 155, text=currentSong['title'], anchor=tkinter.NW, fill="white",
+                self.playerScreen.create_text(10, 185, text=currentSong['title'], anchor=tkinter.NW, fill="white",
                                               font=('lucidatypewriter', 12, 'bold'))
-                self.playerScreen.create_text(15, 180, text=currentSong['album'], anchor=tkinter.NW, fill="white",
+                self.playerScreen.create_text(10, 210, text=currentSong['album'], anchor=tkinter.NW, fill="white",
                                               font=('lucidatypewriter', 10, 'bold'))
-        else:
-            self.playerScreen.create_image(160, 120, image=image)
-            #self.playerScreen.create_rectangle(151, 1, 320, 150, fill="black")
+
+            time = str(status['time']).split(":")
+            played = (float(time[0])/float(time[1]))*320
+            self.playerScreen.create_rectangle(0, 236, played, 240, fill="white")
+        else:   # Blank Screen
+            self.playerScreen.create_image(160, 120, image=bg)
             self.playerScreen.create_text(20, 20, text="Play Something!!", anchor=tkinter.NW, fill="white",
                                           font=('lucidatypewriter', 20, 'bold'))
         songChanged = False
