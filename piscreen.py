@@ -7,7 +7,6 @@ from subprocess import call
 root = tkinter.Tk()
 root.geometry("320x240")
 client = mpd.MPDClient(use_unicode=True)
-footer_text = ''
 config = configparser.ConfigParser()
 config.read('config.ini')
 
@@ -31,21 +30,27 @@ textBackAction = ''
 textSaveAction = ''
 
 image = None
-tickCount = 0
-
+awayCount = 0
+footerMessage = ''
+footerMessageCount = 0
+minTickerLength = 30
+songName = ''
+songChanged = False
+songTicker = False
+songTickerCount = 0
 
 class PiScreen(tkinter.Frame):
 
     def __init__(self, master: 'tkinter.Tk'):
-        global client, status, footer_text
-        host = '192.168.1.120'
+        global client, status
+        #host = '192.168.1.120'
+        host = 'localhost'
         if sys.platform.startswith('linux'):
             host = 'localhost'
         client.connect(host, 6600)
         tkinter.Frame.__init__(self, master, padx=0, pady=0)
         self.pack()
         self.place(height=240, width=320, x=0, y=0)
-        self.config(bg="black")
         status = client.status()
         self.volume = int(status["volume"])
 
@@ -76,78 +81,112 @@ class PiScreen(tkinter.Frame):
             "1.P": "PLAYLIST"
         }
 
-        self.headerText = 'SOME Header'
-        self.headerTextVar = tkinter.StringVar()
-        self.headerTextVar.set(str(self.headerText))
+        self.current_song_var = tkinter.StringVar()
         self.footer_text_var = tkinter.StringVar()
-        self.footer_text_var.set(str(footer_text))
 
-        self.headerFrame = Frame(self, width=320, height=20, bg="black")
+        # Screens
+        self.playerScreen = Canvas(self, width=320, height=240, bg="black", borderwidth=0, highlightthickness=0)
+
+        self.menuScreen = Frame(self, width=320, height=240, bg="white")
+        self.menuScreen.place(height=240, width=320, x=0, y=0)
+
+        # Menu Screen items
+        self.headerFrame = Frame(self.menuScreen, width=320, height=20, bg="black")
         self.headerFrame.pack(side=tkinter.TOP, fill=X)
 
-        self.headerLabel = Label(self.headerFrame, font=('lucidatypewriter', 10, 'bold'), bg='black', foreground='white', textvariable=self.headerTextVar, justify=tkinter.LEFT, anchor=tkinter.W)
-        self.headerLabel.place(x=0, y=0, width=300, height=20, anchor=tkinter.NW)
+        self.currentSongLabel = Label(self.headerFrame, font=('courier', 12, 'bold'), bg='black', foreground='white', textvariable=self.current_song_var, justify=tkinter.LEFT, anchor=tkinter.W)
+        self.currentSongLabel.place(x=0, y=0, width=300, height=20, anchor=tkinter.NW)
 
         self.volumeLabel = Label(self.headerFrame, font=('lucidatypewriter', 10, 'bold'), bg='black', foreground='white', text='')
         self.volumeLabel.place(x=300, y=0, anchor=tkinter.NW)
 
-        self.mainFrame = Frame(self, width=320, height=200)
+        self.mainFrame = Frame(self.menuScreen, width=320, height=200)
         self.mainFrame.pack(side=tkinter.TOP, fill=Y)
 
-        self.listbox = Listbox(self.mainFrame, selectmode=tkinter.SINGLE, font=('lucidatypewriter', 10), bg='black',
+        self.listbox = Listbox(self.mainFrame, selectmode=tkinter.SINGLE, font=('lucidatypewriter', 11), bg='black',
                                fg='white', height=10, activestyle="none", borderwidth=0, highlightthickness=0)
-        self.listbox.bind("<Key>", self.key)
+        self.listbox.bind("<Key>", self.handle_keys)
         self.listbox.configure(width=320, height=11)
         self.listbox.pack(side=tkinter.TOP, expand=1, ipadx=0, ipady=0, padx=0, pady=0)
         self.listbox.focus_set()
 
-        self.player = Canvas(self.mainFrame, width=320, height=200, bg="black", borderwidth=0, highlightthickness=0)
-
-        self.footer = Label(self, textvariable=self.footer_text_var, font=('lucidatypewriter', 10, 'bold'), bg='black',
+        self.footer = Label(self.menuScreen, textvariable=self.footer_text_var, font=('lucidatypewriter', 10, 'bold'), bg='black',
                             foreground='white', justify=tkinter.LEFT, anchor=tkinter.W)
         self.footer.configure(width=320, height=1)
         self.footer.pack(side = tkinter.BOTTOM)
 
         self.focus_set()
-        self.bind("<Key>", self.key)
+        self.bind("<Key>", self.handle_keys)
         self.screen = "1"
         self.show_screen()
         self.tick()
 
     def tick(self):
-        global tickCount, keyMode
+        global awayCount, keyMode, footerMessage, footerMessageCount
         self.update_header()
         if keyMode != 'PLAYER':
-            tickCount += 1
-            if tickCount > 120:
-                tickCount = 0
+            awayCount += 1
+            if awayCount > 120:
+                awayCount = 0
                 self.screen = ''
                 self.show_screen()
         else:
-            tickCount = 0
-        self.after(500, self.tick)
+            awayCount = 0
+
+        if footerMessage == self.footer_text_var.get():
+            footerMessageCount += 1
+            if footerMessageCount > 8:
+                footerMessageCount = 0
+                self.footer_text_var.set("")
+        else:
+            footerMessage = self.footer_text_var.get()
+            footerMessageCount = 0
+
+        self.after(800, self.tick)
 
     def update_header(self):
-        global status, keyMode, currentSong
+        global status, keyMode, songChanged, currentSong, songName, songTicker, minTickerLength, songTickerCount
         status = client.status()
         self.volume = int(status["volume"])
         header = ''
+        self.volumeLabel.configure(text=status["volume"])
         if status["state"] == "play":
             currentSong = client.currentsong()
-            header = header + currentSong["artist"][:15] + "-" + currentSong["title"][:25]
-        # header = header + "V" + status["volume"] + ",R" + status["random"]
-        self.volumeLabel.configure(text=status["volume"])
-        if self.headerTextVar.get() != header:
-            self.headerTextVar.set(header)
-            if keyMode == 'PLAYER':
+            song = currentSong["artist"] + " - " + currentSong["title"]
+            if songName != song:
+                songChanged = True
+                if keyMode != 'PLAYER': # song changed, refresh ui
+                    songName = song
+                    if len(songName) >= minTickerLength:
+                        songTicker = True
+                        songTickerCount = -1
+                    else:
+                        songTicker = False
+                        songTickerCount = 0
+            if keyMode != 'PLAYER':
+                if songTicker:
+                    songTickerCount += 1
+                    if songTickerCount == len(songName) + 5:
+                        songTickerCount = 0
+                song = songName + "     "
+                new_song = song[songTickerCount:] + song[:songTickerCount]
+                self.current_song_var.set(new_song)
+            elif keyMode == 'PLAYER':
                 self.show_player()
+        else:
+            if songName != '':
+                self.current_song_var.set('')
+                songName = ''
+                songChanged = True
+                if keyMode == 'PLAYER':
+                    self.show_player()
 
     def show_screen(self):
         global keyMode
         if self.screen == '':
             keyMode = 'PLAYER'
-            self.listbox.pack_forget()
-            self.player.pack(side=tkinter.TOP, expand=1, ipadx=0, ipady=0, padx=0, pady=0)
+            self.menuScreen.place_forget()
+            self.playerScreen.place(height=240, width=320, x=0, y=0)
             self.show_player()
             self.update()
             self.screen = '1'
@@ -185,39 +224,39 @@ class PiScreen(tkinter.Frame):
         return
 
     def show_player(self):
-        global image, status, currentSong
-        if sys.platform.startswith('linux'):
-            process = subprocess.Popen("./coverart.sh", shell=True, stdout=subprocess.PIPE).stdout.read()
-        else:
-            process = "./icons/ic_album_white_48dp.png"
-        image = ImageTk.PhotoImage(Image.open(process).resize((150,150), Image.ANTIALIAS))
-        self.player.create_image(75, 75, image=image)
+        global image, status, currentSong, songChanged
+        if songChanged or image is None:
+            if sys.platform.startswith('linux'):
+                process = subprocess.Popen("./coverart.sh", shell=True, stdout=subprocess.PIPE).stdout.read()
+            else:
+                process = "./icons/bg.png"
+            image = ImageTk.PhotoImage(Image.open(process).resize((320,240), Image.ANTIALIAS))
+
         if status["state"] == "play":
-            self.player.create_rectangle(151, 1, 320, 150, fill="black")
-            self.player.create_text(152, 4, text="Artist:", anchor=tkinter.NW, fill="grey",
-                                    font=('lucidatypewriter', 10, 'bold'))
-            self.player.create_text(152, 20, text=currentSong['artist'], anchor=tkinter.NW, fill="white",
-                                    font=('lucidatypewriter', 10, 'bold'))
-            self.player.create_text(152, 36, text="Song:", anchor=tkinter.NW, fill="grey",
-                                    font=('lucidatypewriter', 10, 'bold'))
-            self.player.create_text(152, 52, text=currentSong['title'], anchor=tkinter.NW, fill="white",
-                                    font=('lucidatypewriter', 10, 'bold'))
-            self.player.create_text(152, 68, text="Album:", anchor=tkinter.NW, fill="grey",
-                                    font=('lucidatypewriter', 10, 'bold'))
-            self.player.create_text(152, 84, text=currentSong['album'], anchor=tkinter.NW, fill="white",
-                                    font=('lucidatypewriter', 10, 'bold'))
+            if songChanged:
+                self.playerScreen.create_image(160, 120, image=image)
+                #self.playerScreen.create_rectangle(151, 1, 320, 150, fill="black")
+
+                self.playerScreen.create_text(15, 130, text=currentSong['artist'], anchor=tkinter.NW, fill="white",
+                                              font=('lucidatypewriter', 14, 'bold'))
+                self.playerScreen.create_text(15, 155, text=currentSong['title'], anchor=tkinter.NW, fill="white",
+                                              font=('lucidatypewriter', 12, 'bold'))
+                self.playerScreen.create_text(15, 180, text=currentSong['album'], anchor=tkinter.NW, fill="white",
+                                              font=('lucidatypewriter', 10, 'bold'))
         else:
-            self.player.create_rectangle(151, 1, 320, 150, fill="black")
-            self.player.create_text(152, 4, text="Not Playing", anchor=tkinter.NW, fill="grey",
-                                    font=('lucidatypewriter', 10, 'bold'))
+            self.playerScreen.create_image(160, 120, image=image)
+            #self.playerScreen.create_rectangle(151, 1, 320, 150, fill="black")
+            self.playerScreen.create_text(20, 20, text="Play Something!!", anchor=tkinter.NW, fill="white",
+                                          font=('lucidatypewriter', 20, 'bold'))
+        songChanged = False
         return
 
-    def key(self, event):
+    def handle_keys(self, event):
         global config, client, selectedAlbum, selectedArtist, selectedGenre
-        global keyMode, textEntry, textBackAction, textSaveAction, tickCount
+        global keyMode, textEntry, textBackAction, textSaveAction, awayCount
         global albums, artists, queue, songs, playlists, status, genres
 
-        tickCount = 0
+        awayCount = 0
         keycode = str(event.keycode)
         # self.footer_text_var.set(str("Key Pressed : "+keycode))
         if keyMode == 'PLAYER' and keycode != config["PISCREEN_KEYS"]["vol_up"] \
@@ -226,9 +265,9 @@ class PiScreen(tkinter.Frame):
                 and keycode != config["PISCREEN_KEYS"]["next"]  \
                 and keycode != config["PISCREEN_KEYS"]["prev"]  \
                 and keycode != config["PISCREEN_KEYS"]["power"]:
-            self.listbox.pack(side=tkinter.TOP, expand=1, ipadx=0, ipady=0, padx=0, pady=0)
             keyMode = 'MENU'
-            self.player.pack_forget()
+            self.playerScreen.place_forget()
+            self.menuScreen.place(height=240, width=320, x=0, y=0)
             self.show_screen()
             self.update()
             return
@@ -322,7 +361,7 @@ class PiScreen(tkinter.Frame):
                             albums = []
                             albums = client.list("album", selectedArtist)
                             albums[:0] = ["Add All"]
-                            print("SELECTED Artist "+selectedArtist)
+                            self.footer_text_var.set("SELECTED Artist "+selectedArtist)
                             self.screen = new_screen
                             self.screen_data[new_screen] = albums
                             self.show_screen()
@@ -341,7 +380,7 @@ class PiScreen(tkinter.Frame):
                                 self.screen = new_screen
                                 self.screen_data[new_screen] = songs
                                 self.show_screen()
-                                print("Album Selected " + selectedAlbum)
+                                self.footer_text_var.set("Album Selected " + selectedAlbum)
                             return
                         elif new_screen.count(".") == 5:
                             menu = new_screen.rsplit(".", maxsplit=1)
@@ -364,7 +403,7 @@ class PiScreen(tkinter.Frame):
                             self.screen = new_screen
                             self.screen_data[new_screen] = songs
                             self.show_screen()
-                            print("Album Selected " + selectedAlbum)
+                            self.footer_text_var.set("Album Selected " + selectedAlbum)
                         if new_screen.count(".") == 4:
                             if menu[1] == "1":  # add all
                                 client.findadd("album", selectedAlbum)
@@ -384,7 +423,7 @@ class PiScreen(tkinter.Frame):
                             self.screen = new_screen
                             self.screen_data[new_screen] = songs
                             self.show_screen()
-                            print("Genre Selected " + selectedAlbum)
+                            self.footer_text_var.set("Genre Selected " + selectedAlbum)
                         if new_screen.count(".") == 4:
                             selected_song = songs[int(menu[1]) - 1]
                             client.findadd("title", selected_song, "genre", selectedGenre)
