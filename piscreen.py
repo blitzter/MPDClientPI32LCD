@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import tkinter, mpd, configparser, subprocess, sys
 from tkinter import Listbox, Label, Canvas, Frame, Y, X
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageColor
 from subprocess import call
 
 root = tkinter.Tk()
@@ -9,6 +9,14 @@ root.geometry("320x240")
 client = mpd.MPDClient(use_unicode=True)
 config = configparser.ConfigParser()
 config.read('config.ini')
+
+theme_name=config["THEME"]["theme"]
+theme = configparser.ConfigParser()
+theme.read('./theme/'+theme_name+'/theme.ini')
+
+icon_random = None
+icon_repeat = None
+icon_single = None
 
 status = {}
 
@@ -43,7 +51,7 @@ songTickerCount = 0
 class PiScreen(tkinter.Frame):
 
     def __init__(self, master: 'tkinter.Tk'):
-        global client, status
+        global client, status, theme
         #host = '192.168.1.120'
         host = 'localhost'
         if sys.platform.startswith('linux'):
@@ -63,13 +71,8 @@ class PiScreen(tkinter.Frame):
             "1.3.1": {"ACTION": "ARTISTS"},
             "1.3.2": {"ACTION": "ALBUMS"},
             "1.3.3": {"ACTION": "GENRES"},
-            "1.4": ["UPDATE LIBRARY", "RANDOM_MODE","CHANGE OUTPUT"],
+            "1.4": ["UPDATE LIBRARY"],
             "1.4.1": {"ACTION": "UPDATE_LIBRARY"},
-            "1.4.2": {"ACTION": "RANDOM_MODE"},
-            "1.4.3": ["HDMI", "ANALOG", "USB"],
-            "1.4.3.1": {"ACTION": "SET_HDMI_OUT"},
-            "1.4.3.2": {"ACTION": "SET_ANALOG_OUT"},
-            "1.4.3.3": {"ACTION": "SET_USB_OUT"},
             "1.5": {"ACTION": "CLEAR"},
             "1.6": {"ACTION": "RANDOM"},
             "1.7": {"ACTION": "REPEAT"},
@@ -86,33 +89,33 @@ class PiScreen(tkinter.Frame):
         self.footer_text_var = tkinter.StringVar()
 
         # Screens
-        self.playerScreen = Canvas(self, width=320, height=240, bg="black", borderwidth=0, highlightthickness=0)
+        self.playerScreen = Canvas(self, width=320, height=240, bg=theme['PLAYER']['background'], borderwidth=0, highlightthickness=0)
 
         self.menuScreen = Frame(self, width=320, height=240, bg="white")
         self.menuScreen.place(height=240, width=320, x=0, y=0)
 
         # Menu Screen items
-        self.headerFrame = Frame(self.menuScreen, width=320, height=20, bg="black")
+        self.headerFrame = Frame(self.menuScreen, width=320, height=20, bg=theme['HEADER']['background'])
         self.headerFrame.pack(side=tkinter.TOP, fill=X)
 
-        self.currentSongLabel = Label(self.headerFrame, font=('courier', 12, 'bold'), bg='black', foreground='white', textvariable=self.current_song_var, justify=tkinter.LEFT, anchor=tkinter.W)
+        self.currentSongLabel = Label(self.headerFrame, font=(theme['HEADER']['font'], 12, 'bold'), bg=theme['HEADER']['background'], foreground=theme['HEADER']['foreground'], textvariable=self.current_song_var, justify=tkinter.LEFT, anchor=tkinter.W)
         self.currentSongLabel.place(x=0, y=0, width=300, height=20, anchor=tkinter.NW)
 
-        self.volumeLabel = Label(self.headerFrame, font=('lucidatypewriter', 10, 'bold'), bg='black', foreground='white', text='')
+        self.volumeLabel = Label(self.headerFrame, font=(theme['HEADER']['font'], 10, 'bold'), bg=theme['HEADER']['background'], foreground=theme['HEADER']['foreground'], text='')
         self.volumeLabel.place(x=300, y=0, anchor=tkinter.NW)
 
         self.mainFrame = Frame(self.menuScreen, width=320, height=200)
         self.mainFrame.pack(side=tkinter.TOP, fill=Y)
 
-        self.listbox = Listbox(self.mainFrame, selectmode=tkinter.SINGLE, font=('lucidatypewriter', 11), bg='black',
-                               fg='white', height=10, activestyle="none", borderwidth=0, highlightthickness=0)
+        self.listbox = Listbox(self.mainFrame, selectmode=tkinter.SINGLE, font=(theme['MAIN']['font'], 11), bg=theme['MAIN']['background'],
+                               fg=theme['MAIN']['foreground'], height=10, activestyle="none", borderwidth=0, highlightthickness=0, selectbackground=theme['MAIN']['selected'])
         self.listbox.bind("<Key>", self.handle_keys)
         self.listbox.configure(width=320, height=11)
         self.listbox.pack(side=tkinter.TOP, expand=1, ipadx=0, ipady=0, padx=0, pady=0)
         self.listbox.focus_set()
 
-        self.footer = Label(self.menuScreen, textvariable=self.footer_text_var, font=('lucidatypewriter', 10, 'bold'), bg='black',
-                            foreground='white', justify=tkinter.LEFT, anchor=tkinter.W)
+        self.footer = Label(self.menuScreen, textvariable=self.footer_text_var, font=(theme['FOOTER']['font'], 10, 'bold'), bg=theme['FOOTER']['background'],
+                            foreground=theme['FOOTER']['foreground'], justify=tkinter.LEFT, anchor=tkinter.W)
         self.footer.configure(width=320, height=1)
         self.footer.pack(side = tkinter.BOTTOM)
 
@@ -202,7 +205,7 @@ class PiScreen(tkinter.Frame):
                     if not item:
                         self.listbox.insert(tkinter.END, "")
                     else:
-                        self.listbox.insert(tkinter.END, item[:45])
+                        self.listbox.insert(tkinter.END, item[:40])
                 if format == "SONG":
                     songname = ''
                     if 'artist' in item:
@@ -225,44 +228,53 @@ class PiScreen(tkinter.Frame):
         return
 
     def show_player(self):
-        global image, bg, status, currentSong, songChanged
+        global image, bg, songChanged
         if songChanged or image is None:
             if sys.platform.startswith('linux'):
                 process = subprocess.Popen("./coverart.sh", shell=True, stdout=subprocess.PIPE).stdout.read()
             else:
                 process = "./icons/ic_album_white_48dp.png"
             image = ImageTk.PhotoImage(Image.open(process).resize((136,136), Image.ANTIALIAS))
+        if bg is None:
             process = "./icons/bg.png"
+            if 'img_background' in theme['PLAYER']:
+                process = theme['PLAYER']['img_background']
             bg = ImageTk.PhotoImage(Image.open(process).resize((320, 240), Image.ANTIALIAS))
+        if icon_random is None:
+            self.load_icons()
 
         if status["state"] == "play":
             if songChanged:
                 self.playerScreen.create_image(160, 120, image=bg)
 
-                self.playerScreen.create_rectangle(10, 10, 150, 150, fill="white")
+                self.playerScreen.create_rectangle(10, 10, 150, 150, fill=theme['PLAYER']['foreground'])
                 self.playerScreen.create_image(80, 80, image=image)
 
-                self.playerScreen.create_text(10, 160, text=currentSong['artist'], anchor=tkinter.NW, fill="white",
-                                              font=('lucidatypewriter', 14, 'bold'))
-                self.playerScreen.create_text(10, 185, text=currentSong['title'], anchor=tkinter.NW, fill="white",
-                                              font=('lucidatypewriter', 12, 'bold'))
-                self.playerScreen.create_text(10, 210, text=currentSong['album'], anchor=tkinter.NW, fill="white",
-                                              font=('lucidatypewriter', 10, 'bold'))
+                self.playerScreen.create_image(178, 132, image=icon_random)
+                self.playerScreen.create_image(224, 132, image=icon_repeat)
+                self.playerScreen.create_image(270, 132, image=icon_single)
+
+                self.playerScreen.create_text(10, 160, text=currentSong['artist'], anchor=tkinter.NW, fill=theme['PLAYER']['foreground'],
+                                              font=(theme['PLAYER']['font'], 14, 'bold'))
+                self.playerScreen.create_text(10, 185, text=currentSong['title'], anchor=tkinter.NW, fill=theme['PLAYER']['foreground'],
+                                              font=(theme['PLAYER']['font'], 12, 'bold'))
+                self.playerScreen.create_text(10, 210, text=currentSong['album'], anchor=tkinter.NW, fill=theme['PLAYER']['foreground'],
+                                              font=(theme['PLAYER']['font'], 10, 'bold'))
 
             time = str(status['time']).split(":")
             played = (float(time[0])/float(time[1]))*320
-            self.playerScreen.create_rectangle(0, 236, played, 240, fill="white")
+            self.playerScreen.create_rectangle(0, 236, played, 240, fill=theme['PLAYER']['foreground'])
         else:   # Blank Screen
             self.playerScreen.create_image(160, 120, image=bg)
-            self.playerScreen.create_text(20, 20, text="Play Something!!", anchor=tkinter.NW, fill="white",
-                                          font=('lucidatypewriter', 20, 'bold'))
+            self.playerScreen.create_text(20, 20, text="Play Something!!", anchor=tkinter.NW, fill=theme['PLAYER']['foreground'],
+                                          font=(theme['PLAYER']['font'], 20, 'bold'))
         songChanged = False
         return
 
     def handle_keys(self, event):
         global config, client, selectedAlbum, selectedArtist, selectedGenre
         global keyMode, textEntry, textBackAction, textSaveAction, awayCount
-        global albums, artists, queue, songs, playlists, status, genres
+        global albums, artists, queue, songs, playlists, status, genres, songChanged
 
         awayCount = 0
         keycode = str(event.keycode)
@@ -331,6 +343,7 @@ class PiScreen(tkinter.Frame):
                 self.show_screen()
             else:
                 self.screen = ''
+                songChanged = True
                 self.show_screen()
             return
         if keycode == config["PISCREEN_KEYS"]["right"] or keycode == config["PISCREEN_KEYS"]["ok"]:  # right or return
@@ -558,6 +571,7 @@ class PiScreen(tkinter.Frame):
                 client.random('0')
             status = client.status()
             self.screen_data['1'][5] = "RANDOM "+status['random']
+            self.update_random()
             self.show_screen()
         elif action == "REPEAT":
             if status['repeat'] == '0':
@@ -566,6 +580,7 @@ class PiScreen(tkinter.Frame):
                 client.repeat('0')
             status = client.status()
             self.screen_data['1'][6] = "REPEAT "+status['repeat']
+            self.update_repeat()
             self.show_screen()
         elif action == "SINGLE":
             if status['single'] == '0':
@@ -574,6 +589,7 @@ class PiScreen(tkinter.Frame):
                 client.single('0')
             status = client.status()
             self.screen_data['1'][7] = "SINGLE "+status['single']
+            self.update_single()
             self.show_screen()
         elif action == "CONSUME":
             if status['consume'] == '0':
@@ -585,6 +601,79 @@ class PiScreen(tkinter.Frame):
             self.show_screen()
         self.update()
         return
+
+    def load_icons(self):
+        self.update_random()
+        self.update_repeat()
+        self.update_single()
+
+    def update_random(self):
+        global status, theme, icon_random
+        fgcolor = ImageColor.getrgb(theme['PLAYER']['foreground'])
+        bgcolor = ImageColor.getrgb(theme['PLAYER']['background'])
+        fgcolor += (255,)
+        bgcolor += (255,)
+        icon_random = Image.open('./icons/ic_shuffle_white_36dp.png')
+        if icon_random.mode != 'RGBA':
+            icon_random = icon_random.convert('RGBA')
+        data = list(icon_random.getdata())
+        newData = list()
+        for pixel in data:
+            if pixel[3] != 0:
+                if status['random'] == '1':
+                    newData.append(fgcolor)
+                else:
+                    newData.append(bgcolor)
+            else:
+                newData.append(pixel)
+        icon_random.putdata(newData)
+        icon_random = ImageTk.PhotoImage(icon_random.resize((36, 36), Image.ANTIALIAS))
+        self.update()
+
+    def update_single(self):
+        global status, theme, icon_single
+        fgcolor = ImageColor.getrgb(theme['PLAYER']['foreground'])
+        bgcolor = ImageColor.getrgb(theme['PLAYER']['background'])
+        fgcolor += (255,)
+        bgcolor += (255,)
+        icon_single = Image.open('./icons/ic_repeat_one_white_36dp.png')
+        if icon_single.mode != 'RGBA':
+            icon_single = icon_single.convert('RGBA')
+        data = list(icon_single.getdata())
+        newData = list()
+        for pixel in data:
+            if pixel[3] != 0:
+                if status['single'] == '1':
+                    newData.append(fgcolor)
+                else:
+                    newData.append(bgcolor)
+            else:
+                newData.append(pixel)
+        icon_single.putdata(newData)
+        icon_single = ImageTk.PhotoImage(icon_single.resize((36, 36), Image.ANTIALIAS))
+        self.update()
+
+    def update_repeat(self):
+        global status, theme, icon_repeat
+        fgcolor = ImageColor.getrgb(theme['PLAYER']['foreground'])
+        bgcolor = ImageColor.getrgb(theme['PLAYER']['background'])
+        fgcolor += (255,)
+        bgcolor += (255,)
+        icon_repeat = Image.open('./icons/ic_repeat_white_36dp.png')
+        if icon_repeat.mode != 'RGBA':
+            icon_repeat = icon_repeat.convert('RGBA')
+        data = list(icon_repeat.getdata())
+        newData = list()
+        for pixel in data:
+            if pixel[3] != 0:
+                if status['repeat'] == '1':
+                    newData.append(fgcolor)
+                else:
+                    newData.append(bgcolor)
+            else:
+                newData.append(pixel)
+        icon_repeat.putdata(newData)
+        icon_repeat = ImageTk.PhotoImage(icon_repeat.resize((36, 36), Image.ANTIALIAS))
 
 app = PiScreen(root)
 app.mainloop()
