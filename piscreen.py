@@ -3,6 +3,7 @@ import tkinter, mpd, configparser, subprocess, sys
 from tkinter import Listbox, Label, Canvas, Frame, Y, X
 from PIL import Image, ImageTk, ImageColor
 from subprocess import call
+from pathlib import Path
 
 root = tkinter.Tk()
 root.geometry("320x240")
@@ -26,6 +27,7 @@ artists = []
 albums = []
 genres = []
 songs = []
+themes = []
 
 selectedAlbum = ''
 selectedArtist = ''
@@ -71,8 +73,9 @@ class PiScreen(tkinter.Frame):
             "1.3.1": {"ACTION": "ARTISTS"},
             "1.3.2": {"ACTION": "ALBUMS"},
             "1.3.3": {"ACTION": "GENRES"},
-            "1.4": ["UPDATE LIBRARY"],
+            "1.4": ["UPDATE LIBRARY", "THEMES"],
             "1.4.1": {"ACTION": "UPDATE_LIBRARY"},
+            "1.4.2": {"ACTION": "THEMES"},
             "1.5": {"ACTION": "CLEAR"},
             "1.6": {"ACTION": "RANDOM"},
             "1.7": {"ACTION": "REPEAT"},
@@ -108,7 +111,7 @@ class PiScreen(tkinter.Frame):
         self.mainFrame.pack(side=tkinter.TOP, fill=Y)
 
         self.listbox = Listbox(self.mainFrame, selectmode=tkinter.SINGLE, font=(theme['MAIN']['font'], 11), bg=theme['MAIN']['background'],
-                               fg=theme['MAIN']['foreground'], height=10, activestyle="none", borderwidth=0, highlightthickness=0, selectbackground=theme['MAIN']['selected'])
+                               fg=theme['MAIN']['foreground'], height=10, activestyle="none", borderwidth=0, highlightthickness=0, selectbackground=theme['MAIN']['selected'], selectforeground=theme['MAIN']['foreground'])
         self.listbox.bind("<Key>", self.handle_keys)
         self.listbox.configure(width=320, height=11)
         self.listbox.pack(side=tkinter.TOP, expand=1, ipadx=0, ipady=0, padx=0, pady=0)
@@ -212,7 +215,8 @@ class PiScreen(tkinter.Frame):
                         songname = item['artist'][:20]
                     songname += " - "
                     if 'title' in item:
-                        songname += item['title'][:25]
+                        max = 42 - len(songname)
+                        songname += item['title'][:max]
                     self.listbox.insert(tkinter.END, songname)
                 if format == "PLAYLIST":
                     playlistname = ''
@@ -273,7 +277,7 @@ class PiScreen(tkinter.Frame):
 
     def handle_keys(self, event):
         global config, client, selectedAlbum, selectedArtist, selectedGenre
-        global keyMode, textEntry, textBackAction, textSaveAction, awayCount
+        global keyMode, textEntry, textBackAction, textSaveAction, awayCount, theme_name
         global albums, artists, queue, songs, playlists, status, genres, songChanged
 
         awayCount = 0
@@ -450,6 +454,11 @@ class PiScreen(tkinter.Frame):
                             client.findadd("title", selected_song, "genre", selectedGenre)
                             self.footer_text_var.set("Added " + selected_song + selectedGenre)
                         return
+                    if str(new_screen).startswith("1.4.T"):
+                        menu = new_screen.rsplit(".", maxsplit=1)
+                        theme_name = themes[int(menu[1]) - 1]
+                        self.footer_text_var.set("Applying Theme " + theme_name)
+                        self.apply_theme()
             return
         if keycode == config["PISCREEN_KEYS"]["vol_up"]:
             if self.volume < 100:
@@ -497,7 +506,7 @@ class PiScreen(tkinter.Frame):
 
     def run_command(self, action):
         global client, keyMode, textEntry, status
-        global albums, artists, queue, songs, playlists, genres
+        global albums, artists, queue, songs, playlists, genres, themes
         if action == "QUEUE":
             local_queue = client.playlistinfo()
             queue.clear()
@@ -532,6 +541,12 @@ class PiScreen(tkinter.Frame):
         elif action == "UPDATE_LIBRARY":
             self.footer_text_var.set("Updating library")
             client.update()
+        elif action == "THEMES":
+            self.footer_text_var.set("Select Theme")
+            themes = ["default", "foofighters", "light"]
+            self.screen = "1.4.T"
+            self.screen_data["1.4.T"] = themes
+            self.show_screen()
         elif action == "SAVE_PLAYLIST":
             keyMode = 'MENU'
             found = False
@@ -674,6 +689,35 @@ class PiScreen(tkinter.Frame):
                 newData.append(pixel)
         icon_repeat.putdata(newData)
         icon_repeat = ImageTk.PhotoImage(icon_repeat.resize((36, 36), Image.ANTIALIAS))
+
+    def apply_theme(self):
+        global theme_name, theme, config, bg
+        my_file = Path('./theme/' + theme_name + '/theme.ini')
+        if my_file.is_file():
+            theme = configparser.ConfigParser()
+            theme.read('./theme/' + theme_name + '/theme.ini')
+            # player related settings
+            bg = None
+            self.playerScreen.configure(bg=theme['PLAYER']['background'])
+            self.load_icons()
+            # menu related settings
+            self.headerFrame.configure(bg=theme['HEADER']['background'])
+            self.currentSongLabel.configure(font=(theme['HEADER']['font'], 12, 'bold'),
+                                            bg=theme['HEADER']['background'], foreground=theme['HEADER']['foreground'])
+            self.volumeLabel.configure(font=(theme['HEADER']['font'], 10, 'bold'), bg=theme['HEADER']['background'],
+                                       foreground=theme['HEADER']['foreground'])
+            self.listbox.configure(font=(theme['MAIN']['font'], 11), bg=theme['MAIN']['background'],
+                                   fg=theme['MAIN']['foreground'], selectbackground=theme['MAIN']['selected'], selectforeground=theme['MAIN']['foreground'])
+            self.footer.configure(font=(theme['FOOTER']['font'], 10, 'bold'), bg=theme['FOOTER']['background'],
+                                  foreground=theme['FOOTER']['foreground'])
+
+            # write theme to config.ini
+            config["THEME"]["theme"] = theme_name
+            with open('config.ini', 'w') as configfile:
+                config.write(configfile)
+        else:
+            self.footer_text_var.set("Theme Not Found")
+            theme_name = config["THEME"]["theme"]
 
 app = PiScreen(root)
 app.mainloop()
