@@ -49,6 +49,7 @@ songName = ''
 songChanged = False
 songTicker = False
 songTickerCount = 0
+volumeChanged = False
 
 class PiScreen(tkinter.Frame):
 
@@ -215,7 +216,7 @@ class PiScreen(tkinter.Frame):
                         songname = item['artist'][:20]
                     songname += " - "
                     if 'title' in item:
-                        max = 42 - len(songname)
+                        max = 40 - len(songname)
                         songname += item['title'][:max]
                     self.listbox.insert(tkinter.END, songname)
                 if format == "PLAYLIST":
@@ -232,7 +233,7 @@ class PiScreen(tkinter.Frame):
         return
 
     def show_player(self):
-        global image, bg, songChanged
+        global image, bg, songChanged, volumeChanged
         if songChanged or image is None:
             if sys.platform.startswith('linux'):
                 process = subprocess.Popen("./coverart.sh", shell=True, stdout=subprocess.PIPE).stdout.read()
@@ -257,6 +258,8 @@ class PiScreen(tkinter.Frame):
                 self.playerScreen.create_image(178, 132, image=icon_random)
                 self.playerScreen.create_image(224, 132, image=icon_repeat)
                 self.playerScreen.create_image(270, 132, image=icon_single)
+                self.playerScreen.create_rectangle(298, 146, 308, 92, fill=theme['PLAYER']['background'], outline=theme['PLAYER']['foreground'], width=1)
+                self.playerScreen.create_line(303, 144, 303, 144 - int(self.volume / 2), fill=theme['PLAYER']['foreground'], width=7)
 
                 self.playerScreen.create_text(10, 160, text=currentSong['artist'], anchor=tkinter.NW, fill=theme['PLAYER']['foreground'],
                                               font=(theme['PLAYER']['font'], 14, 'bold'))
@@ -264,13 +267,20 @@ class PiScreen(tkinter.Frame):
                                               font=(theme['PLAYER']['font'], 12, 'bold'))
                 self.playerScreen.create_text(10, 210, text=currentSong['album'], anchor=tkinter.NW, fill=theme['PLAYER']['foreground'],
                                               font=(theme['PLAYER']['font'], 10, 'bold'))
+                self.playerScreen.create_rectangle(0, 236, 320, 240, fill=theme['PLAYER']['background'])
 
             time = str(status['time']).split(":")
             played = (float(time[0])/float(time[1]))*320
             self.playerScreen.create_rectangle(0, 236, played, 240, fill=theme['PLAYER']['foreground'])
+            if volumeChanged:
+                volumeChanged = False
+                self.playerScreen.create_rectangle(298, 146, 308, 92, fill=theme['PLAYER']['background'],
+                                               outline=theme['PLAYER']['foreground'], width=1)
+                self.playerScreen.create_line(303, 144, 303, 144 - int(self.volume / 2), fill=theme['PLAYER']['foreground'],
+                                          width=7)
         else:   # Blank Screen
             self.playerScreen.create_image(160, 120, image=bg)
-            self.playerScreen.create_text(20, 20, text="Play Something!!", anchor=tkinter.NW, fill=theme['PLAYER']['foreground'],
+            self.playerScreen.create_text(20, 20, text=theme['PLAYER']['default_message'], anchor=tkinter.NW, fill=theme['PLAYER']['foreground'],
                                           font=(theme['PLAYER']['font'], 20, 'bold'))
         songChanged = False
         return
@@ -278,7 +288,7 @@ class PiScreen(tkinter.Frame):
     def handle_keys(self, event):
         global config, client, selectedAlbum, selectedArtist, selectedGenre
         global keyMode, textEntry, textBackAction, textSaveAction, awayCount, theme_name
-        global albums, artists, queue, songs, playlists, status, genres, songChanged
+        global albums, artists, queue, songs, playlists, status, genres, songChanged, volumeChanged
 
         awayCount = 0
         keycode = str(event.keycode)
@@ -464,6 +474,7 @@ class PiScreen(tkinter.Frame):
             if self.volume < 100:
                 self.volume += 1
                 client.setvol(self.volume)
+                volumeChanged = True
                 self.footer_text_var.set("Volume Up")
             else:
                 self.footer_text_var.set("Volume Max!!")
@@ -472,6 +483,7 @@ class PiScreen(tkinter.Frame):
             if self.volume > 0:
                 self.volume -= 1
                 client.setvol(self.volume)
+                volumeChanged = True
                 self.footer_text_var.set("Volume Down")
             else:
                 self.footer_text_var.set("Volume Zero!!")
@@ -643,7 +655,6 @@ class PiScreen(tkinter.Frame):
                 newData.append(pixel)
         icon_random.putdata(newData)
         icon_random = ImageTk.PhotoImage(icon_random.resize((36, 36), Image.ANTIALIAS))
-        self.update()
 
     def update_single(self):
         global status, theme, icon_single
@@ -666,7 +677,6 @@ class PiScreen(tkinter.Frame):
                 newData.append(pixel)
         icon_single.putdata(newData)
         icon_single = ImageTk.PhotoImage(icon_single.resize((36, 36), Image.ANTIALIAS))
-        self.update()
 
     def update_repeat(self):
         global status, theme, icon_repeat
