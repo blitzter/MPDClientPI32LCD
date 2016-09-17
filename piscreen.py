@@ -209,14 +209,14 @@ class PiScreen(tkinter.Frame):
                     if not item:
                         self.listbox.insert(tkinter.END, "")
                     else:
-                        self.listbox.insert(tkinter.END, item[:40])
+                        self.listbox.insert(tkinter.END, item[:38])
                 if format == "SONG":
                     songname = ''
                     if 'artist' in item:
-                        songname = item['artist'][:20]
+                        songname = item['artist'][:18]
                     songname += " - "
                     if 'title' in item:
-                        max = 40 - len(songname)
+                        max = 38 - len(songname)
                         songname += item['title'][:max]
                     self.listbox.insert(tkinter.END, songname)
                 if format == "PLAYLIST":
@@ -267,11 +267,12 @@ class PiScreen(tkinter.Frame):
                                               font=(theme['PLAYER']['font'], 12, 'bold'))
                 self.playerScreen.create_text(10, 210, text=currentSong['album'], anchor=tkinter.NW, fill=theme['PLAYER']['foreground'],
                                               font=(theme['PLAYER']['font'], 10, 'bold'))
-                self.playerScreen.create_rectangle(0, 236, 320, 240, fill=theme['PLAYER']['background'])
-
-            time = str(status['time']).split(":")
-            played = (float(time[0])/float(time[1]))*320
-            self.playerScreen.create_rectangle(0, 236, played, 240, fill=theme['PLAYER']['foreground'])
+            else:
+                time = str(status['time']).split(":")
+                played = int((float(time[0])/float(time[1]))*320)
+                if played < 3: # bug
+                    self.playerScreen.create_rectangle(0, 236, 320, 240, fill=theme['PLAYER']['background'])
+                self.playerScreen.create_rectangle(0, 236, played, 240, fill=theme['PLAYER']['foreground'])
             if volumeChanged:
                 volumeChanged = False
                 self.playerScreen.create_rectangle(298, 146, 308, 92, fill=theme['PLAYER']['background'],
@@ -298,7 +299,8 @@ class PiScreen(tkinter.Frame):
                 and keycode != config["PISCREEN_KEYS"]["play"]  \
                 and keycode != config["PISCREEN_KEYS"]["next"]  \
                 and keycode != config["PISCREEN_KEYS"]["prev"]  \
-                and keycode != config["PISCREEN_KEYS"]["power"]:
+                and keycode != config["PISCREEN_KEYS"]["power"] \
+                and keycode != config["PISCREEN_KEYS"]["left"]:
             keyMode = 'MENU'
             self.playerScreen.place_forget()
             self.menuScreen.place(height=240, width=320, x=0, y=0)
